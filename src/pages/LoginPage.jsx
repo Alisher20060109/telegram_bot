@@ -67,7 +67,7 @@ export default function LoginPage({ setIsLogin }) {
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-800 flex justify-center items-center">
+    <div className="relative w-full h-screen overflow-hidden bg-linear-to-br from-indigo-600 to-purple-800 flex justify-center items-center">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"></div>
 
       <div className="relative z-10 w-full max-w-md p-8 rounded-3xl shadow-2xl bg-white/95 backdrop-blur-lg mx-4">

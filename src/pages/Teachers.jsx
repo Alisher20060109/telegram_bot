@@ -1,4 +1,7 @@
 import React, { useState } from "react";
+import { BiEditAlt } from "react-icons/bi";
+import { IoIosSearch } from "react-icons/io";
+import { MdDeleteOutline } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -79,7 +82,7 @@ export default function Teachers({ setIsLogin }) {
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-amber-500 outline-none"
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <span className="absolute left-3 top-2.5">🔍</span>
+              <span className="absolute left-3 top-2.5"><IoIosSearch /></span>
             </div>
             <button 
               onClick={() => setIsModalOpen(true)}
@@ -90,7 +93,7 @@ export default function Teachers({ setIsLogin }) {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
-            <table className="w-full text-left min-w-[600px]">
+            <table className="w-full text-left min-w-150">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-6 py-4 text-sm font-semibold text-gray-600">O'QITUVCHI</th>
@@ -115,8 +118,8 @@ export default function Teachers({ setIsLogin }) {
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="text-gray-400 hover:text-amber-600 mr-4 transition-colors">✏️</button>
-                      <button onClick={() => deleteTeacher(t.id)} className="text-gray-400 hover:text-red-600 transition-colors">🗑️</button>
+                      <button className="text-gray-400 hover:text-amber-600 mr-4 transition-colors"><BiEditAlt /></button>
+                      <button onClick={() => deleteTeacher(t.id)} className="text-gray-400 hover:text-red-600 transition-colors"><MdDeleteOutline /></button>
                     </td>
                   </tr>
                 ))}
