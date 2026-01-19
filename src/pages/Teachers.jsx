@@ -1,25 +1,68 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BiEditAlt } from "react-icons/bi";
 import { IoIosSearch } from "react-icons/io";
 import { MdDeleteOutline } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
+// Firebase ulanishi
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue, push, set, remove } from "firebase/database";
+
+// BU YERNI FIREBASE CONSOLE -> PROJECT SETTINGS'DAN OLIB TO'LDIRING
+const firebaseConfig = {
+  apiKey: "SIZNING_API_KEYINGIZ",
+  authDomain: "admin-panel-2907d.firebaseapp.com",
+  databaseURL: "https://admin-panel-2907d-default-rtdb.firebaseio.com/",
+  projectId: "admin-panel-2907d",
+  storageBucket: "admin-panel-2907d.appspot.com",
+  messagingSenderId: "SIZNING_SENDER_ID",
+  appId: "SIZNING_APP_ID"
+};
+
+// Firebase-ni ishga tushirish (faqat bir marta)
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
 export default function Teachers({ setIsLogin }) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobil sidebar uchun
-
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   // O'qituvchilar state-i
-  const [teachers, setTeachers] = useState([
-    { id: 1, name: "Alisher Ro'ziyev", subject: "Matematika", phone: "+998 90 053 50 16", status: "Active" },
-    { id: 2, name: "Malika Axmedova", subject: "Ingliz tili", phone: "+998 93 765 43 21", status: "Active" },
-    { id: 3, name: "Javohir Toirov", subject: "Dasturlash", phone: "+998 99 000 11 22", status: "Inactive" },
-  ]);
-
-  // Yangi o'qituvchi uchun state
+  const [teachers, setTeachers] = useState([]);
   const [newTeacher, setNewTeacher] = useState({ name: "", subject: "", phone: "" });
+
+  const BOT_TOKEN = "8511058965:AAEu8ty97TzGBhxCdF9U9s-mEtFS_dJYO2M";
+  const CHAT_ID = "5744333432";
+
+  // Telegramga xabar yuborish
+  const sendToTelegram = async (message) => {
+    try {
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: "HTML" }),
+      });
+    } catch (e) { console.error("Telegram error:", e); }
+  };
+
+  // REALTIME MA'LUMOTLARNI OLISH
+  useEffect(() => {
+    const teachersRef = ref(db, 'teachers');
+    const unsubscribe = onValue(teachersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        // Firebase obyektini massivga aylantirish
+        const list = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        setTeachers(list);
+      } else {
+        setTeachers([]);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("isLogin");
@@ -28,32 +71,59 @@ export default function Teachers({ setIsLogin }) {
     navigate("/");
   };
 
-  const handleAddTeacher = (e) => {
+  // GLOBAL QO'SHISH
+  const handleAddTeacher = async (e) => {
     e.preventDefault();
-    const teacherToAdd = {
-      ...newTeacher,
-      id: Date.now(),
-      status: "Active"
-    };
-    setTeachers([...teachers, teacherToAdd]);
-    setIsModalOpen(false);
-    setNewTeacher({ name: "", subject: "", phone: "" });
-    toast.success("Yangi o'qituvchi qo'shildi");
+    try {
+      const teachersRef = ref(db, 'teachers');
+      const newRef = push(teachersRef); // Yangi noyob ID yaratish
+
+      const teacherData = {
+        name: newTeacher.name,
+        subject: newTeacher.subject,
+        phone: newTeacher.phone,
+        status: "Active"
+      };
+
+      await set(newRef, teacherData); // Bazaga yozish
+
+      // Telegramga yuborish
+      const msg = `<b>🆕 YANGI O'QITUVCHI</b>\n👤 Ism: ${newTeacher.name}\n📚 Fan: ${newTeacher.subject}\n📞 Tel: ${newTeacher.phone}`;
+      await sendToTelegram(msg);
+
+      setIsModalOpen(false);
+      setNewTeacher({ name: "", subject: "", phone: "" });
+      toast.success("Muvaffaqiyatli qo'shildi");
+    } catch (err) {
+      toast.error("Bazaga qo'shishda xatolik!");
+      console.error(err);
+    }
   };
 
-  const deleteTeacher = (id) => {
-    setTeachers(teachers.filter(t => t.id !== id));
-    toast.error("O'qituvchi o'chirildi");
+  // GLOBAL O'CHIRISH
+  const deleteTeacher = async (id, name) => {
+    if (window.confirm(`${name}ni o'chirmoqchimisiz?`)) {
+      try {
+        await remove(ref(db, `teachers/${id}`));
+        
+        const msg = `<b>🗑 O'CHIRILDI</b>\n👤 Ism: ${name}\n❌ Ma'lumot olib tashlandi.`;
+        await sendToTelegram(msg);
+        
+        toast.error("O'qituvchi o'chirildi");
+      } catch (err) {
+        toast.error("O'chirishda xato!");
+      }
+    }
   };
 
   const filteredTeachers = teachers.filter(t => 
-    t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    t.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    t.subject?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex">
-      {/* Sidebar - Desktop va Mobil uchun */}
+      {/* Sidebar - To'liq Responsiv */}
       <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white p-6 transform ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"} md:relative md:translate-x-0 transition-transform duration-300`}>
         <h1 className="text-2xl font-bold text-amber-500 mb-10">Admin Panel</h1>
         <nav className="flex flex-col gap-4">
@@ -92,44 +162,47 @@ export default function Teachers({ setIsLogin }) {
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
-            <table className="w-full text-left min-w-150">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-4 text-sm font-semibold text-gray-600">O'QITUVCHI</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-gray-600">FAN</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-gray-600">TELEFON</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-center">STATUS</th>
-                  <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">AMAL</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredTeachers.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold shrink-0">{t.name.charAt(0)}</div>
-                        <span className="font-medium text-gray-800">{t.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{t.subject}</td>
-                    <td className="px-6 py-4 text-gray-600 font-mono text-sm">{t.phone}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-gray-400 hover:text-amber-600 mr-4 transition-colors"><BiEditAlt /></button>
-                      <button onClick={() => deleteTeacher(t.id)} className="text-gray-400 hover:text-red-600 transition-colors"><MdDeleteOutline /></button>
-                    </td>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[700px]">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">O'QITUVCHI</th>
+                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">FAN</th>
+                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">TELEFON</th>
+                    <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-center">STATUS</th>
+                    <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">AMAL</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredTeachers.map((t) => (
+                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold shrink-0">{t.name?.charAt(0)}</div>
+                          <span className="font-medium text-gray-800">{t.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{t.subject}</td>
+                      <td className="px-6 py-4 text-gray-600 font-mono text-sm">{t.phone}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${t.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="text-gray-400 hover:text-amber-600 mr-4 transition-colors"><BiEditAlt /></button>
+                        <button onClick={() => deleteTeacher(t.id, t.name)} className="text-gray-400 hover:text-red-600 transition-colors text-xl"><MdDeleteOutline /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {teachers.length === 0 && <p className="text-center p-10 text-gray-400">Hozircha ma'lumotlar yo'q...</p>}
+            </div>
           </div>
         </main>
       </div>
 
-      {/* Modal */}
+      {/* Modal - To'liq Responsiv */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleAddTeacher} className="bg-white w-full max-w-md rounded-2xl p-6 md:p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
